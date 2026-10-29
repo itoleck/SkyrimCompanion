@@ -17,10 +17,14 @@ fn main() -> eframe::Result {
     let config_path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| config::DEFAULT_PATH.to_string());
-    let config = Config::load_or_create(&config_path);
+    let config = Config::load_or_create(&config::resolve(&config_path));
+    runlog::line(&format!(
+        "Skyrim Companion {} started",
+        env!("COMPANION_VERSION")
+    ));
 
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("Skyrim Companion")
+        .with_title(format!("Skyrim Companion {}", env!("COMPANION_VERSION")))
         .with_inner_size([config.window.width, config.window.height])
         .with_min_inner_size([640.0, 400.0])
         .with_always_on_top_if(config.window.always_on_top);

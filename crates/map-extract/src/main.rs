@@ -2,15 +2,23 @@
 //! into one top-down map image. The tiles are laid out on the cell grid, so the result lines up with
 //! world coordinates exactly and needs no landmark calibration.
 //!
-//! Only loose LOD files are read (xLODGen/DynDOLOD output, or the vanilla files unpacked from the BSAs).
+//! Tiles are read from loose files (xLODGen/DynDOLOD output) or, failing that, straight out of the
+//! game's archives (`Skyrim - Textures7.bsa` has the vanilla ones); loose files win, as in the game.
+//! With no Data folder given, the game is found through the registry and Steam libraries.
 //! If the folder also has an xLODGen terrain heightmap (`Tamriel.Terrain.HeightMap.*.dds`), everything
 //! below sea level is painted as water; otherwise the sea shows the LOD seabed texture.
 
+mod bsa;
+mod locate;
+
 use image::{imageops, Rgba, RgbaImage};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "\
-usage: map-extract <Skyrim Data dir> [options]
+usage: map-extract [Skyrim Data dir] [options]
+
+  With no Data dir, the Skyrim Special Edition install is found automatically.
 
   --out <file>          output PNG (default assets/skyrim_map.png)
   --level <n>           LOD level to read: 4, 8, 16 or 32 (default 4, the sharpest)
@@ -19,7 +27,8 @@ usage: map-extract <Skyrim Data dir> [options]
                         inclusive cell range to keep (default -57 61 -43 50, which matches
                         the [map] defaults in companion.toml)
   --sea-level <h>       water height in heightmap units (default -250, matched to the
-                        Haafingar coastline; only used when a heightmap is present)";
+                        Haafingar coastline; only used when a heightmap is present)
+  --archives-only       ignore loose LOD files and use only the game's archives";
 
 /// One cell is 4096 world units.
 const CELL: i32 = 4096;
@@ -33,6 +42,7 @@ struct Args {
     px_per_cell: u32,
     cells: [i32; 4],
     sea_level: f32,
+    archives_only: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -44,6 +54,7 @@ fn parse_args() -> Result<Args, String> {
         px_per_cell: 40,
         cells: [-57, 61, -43, 50],
         sea_level: -250.0,
+        archives_only: false,
     };
     let num = |it: &mut dyn Iterator<Item = String>, what: &str| -> Result<i32, String> {
         it.next()
@@ -61,18 +72,23 @@ fn parse_args() -> Result<Args, String> {
                 }
             }
             "--sea-level" => args.sea_level = num(&mut it, "--sea-level")? as f32,
+            "--archives-only" => args.archives_only = true,
             "-h" | "--help" => return Err(USAGE.into()),
             _ if args.data.as_os_str().is_empty() => args.data = a.into(),
             _ => return Err(format!("unexpected argument {a}\n\n{USAGE}")),
         }
     }
     if args.data.as_os_str().is_empty() {
-        return Err(USAGE.into());
+        args.data = locate::find_data_dir().ok_or_else(|| {
+            format!("could not find Skyrim Special Edition; pass its Data folder.\n\n{USAGE}")
+        })?;
+        println!("found the game: {}", args.data.display());
     }
     Ok(args)
 }
 
 fn main() {
+    println!("map-extract {}", env!("COMPANION_VERSION"));
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
@@ -88,6 +104,7 @@ fn main() {
 
 fn run(args: &Args) -> Result<(), String> {
     let dir = args.data.join("textures/terrain/tamriel");
+    let tiles = Tiles::scan(&args.data, !args.archives_only);
     let [x0, x1, y0, y1] = args.cells;
     let p = args.px_per_cell;
     let width = (x1 - x0 + 1) as u32 * p;
@@ -96,9 +113,8 @@ fn run(args: &Args) -> Result<(), String> {
 
     let tile_px = args.level as u32 * p;
     let (mut drawn, mut failed) = (0, 0);
-    for entry in std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))? {
-        let path = entry.map_err(|e| e.to_string())?.path();
-        let Some((tx, ty)) = tile_coords(&path, args.level) else {
+    for name in tiles.files.keys() {
+        let Some((tx, ty)) = tile_coords(Path::new(name), args.level) else {
             continue;
         };
         // A tile covers cells tx..tx+level, ty..ty+level. Image rows run north to south.
@@ -111,12 +127,11 @@ fn run(args: &Args) -> Result<(), String> {
         {
             continue;
         }
-        match decode_dxt1(&path) {
+        match tiles.read(name).and_then(|b| decode_dds(&b)) {
             Ok(mut tile) => {
                 // The matching normal map gives the terrain relief; skip shading if it is missing.
-                let normals =
-                    path.with_file_name(format!("tamriel.{}.{tx}.{ty}_n.dds", args.level));
-                if let Ok(n) = decode_dxt1(&normals) {
+                let normals = format!("tamriel.{}.{tx}.{ty}_n.dds", args.level);
+                if let Ok(n) = tiles.read(&normals).and_then(|b| decode_dds(&b)) {
                     hillshade(&mut tile, &n);
                 }
                 let tile =
@@ -125,20 +140,20 @@ fn run(args: &Args) -> Result<(), String> {
                 drawn += 1;
             }
             Err(e) => {
-                eprintln!("skipping {}: {e}", path.display());
+                eprintln!("skipping {name}: {e}");
                 failed += 1;
             }
         }
     }
     if drawn == 0 {
         return Err(format!(
-            "no tamriel.{}.*.dds tiles found in {}",
+            "no tamriel.{}.*.dds tiles found in {} or the game's archives",
             args.level,
             dir.display()
         ));
     }
 
-    match HeightMap::find(&dir) {
+    match HeightMap::find(&dir).filter(|_| !args.archives_only) {
         Some(hm) => {
             paint_water(&mut map, &hm, args);
             println!("water from {}", hm.name);
@@ -175,47 +190,163 @@ fn tile_coords(path: &Path, level: i32) -> Option<(i32, i32)> {
     Some((x.parse().ok()?, y.parse().ok()?))
 }
 
-/// Decodes the top mip level of a DXT1 (BC1) DDS file.
-fn decode_dxt1(path: &Path) -> Result<RgbaImage, String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+/// The terrain LOD textures, by lower-case file name: loose files override archives, and later
+/// archives override earlier ones (mods' archives over the game's own).
+struct Tiles {
+    archives: Vec<bsa::Archive>,
+    files: HashMap<String, Source>,
+}
+
+enum Source {
+    Loose(PathBuf),
+    Packed(usize, bsa::Entry),
+}
+
+impl Tiles {
+    fn scan(data: &Path, loose_files: bool) -> Self {
+        let mut tiles = Tiles {
+            archives: Vec::new(),
+            files: HashMap::new(),
+        };
+        let mut bsas: Vec<PathBuf> = std::fs::read_dir(data)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("bsa")))
+            .collect();
+        // The game's own archives first, so mods' archives replace their tiles.
+        let vanilla = |p: &PathBuf| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.to_ascii_lowercase().starts_with("skyrim - "))
+        };
+        bsas.sort_by_key(|p| (!vanilla(p), p.clone()));
+        for path in bsas {
+            match bsa::Archive::open(&path, r"textures\terrain\tamriel") {
+                Ok(Some(archive)) => {
+                    let index = tiles.archives.len();
+                    for e in &archive.entries {
+                        tiles
+                            .files
+                            .insert(e.name.clone(), Source::Packed(index, e.clone()));
+                    }
+                    println!(
+                        "{} terrain textures in {}",
+                        archive.entries.len(),
+                        path.display()
+                    );
+                    tiles.archives.push(archive);
+                }
+                Ok(None) => {}
+                Err(e) => eprintln!("skipping {}: {e}", path.display()),
+            }
+        }
+        let loose = data.join("textures/terrain/tamriel");
+        let mut count = 0;
+        let listing = std::fs::read_dir(&loose)
+            .into_iter()
+            .filter(|_| loose_files);
+        for entry in listing.flatten().flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                tiles
+                    .files
+                    .insert(name.to_ascii_lowercase(), Source::Loose(entry.path()));
+                count += 1;
+            }
+        }
+        if count > 0 {
+            println!("{count} loose terrain textures in {}", loose.display());
+        }
+        tiles
+    }
+
+    fn read(&self, name: &str) -> Result<Vec<u8>, String> {
+        match self.files.get(name) {
+            Some(Source::Loose(path)) => std::fs::read(path).map_err(|e| e.to_string()),
+            Some(Source::Packed(i, entry)) => self.archives[*i]
+                .read(entry)
+                .map_err(|e| format!("{}: {e}", self.archives[*i].path.display())),
+            None => Err("not found".into()),
+        }
+    }
+}
+
+/// Uncompressed 24/32-bit RGB(A) DDS (the vanilla terrain LOD textures), using the channel masks.
+fn decode_uncompressed(bytes: &[u8], width: usize, height: usize) -> Result<RgbaImage, String> {
+    let u32_at = |o: usize| u32::from_le_bytes(bytes[o..o + 4].try_into().unwrap());
+    let bpp = u32_at(88) as usize / 8;
+    if bpp != 3 && bpp != 4 {
+        return Err(format!("unsupported {}-bit uncompressed DDS", bpp * 8));
+    }
+    let masks = [u32_at(92), u32_at(96), u32_at(100), u32_at(104)];
+    let data = bytes
+        .get(128..128 + width * height * bpp)
+        .ok_or("truncated")?;
+    let channel = |px: u32, mask: u32| -> u8 {
+        if mask == 0 {
+            return 255;
+        }
+        let v = (px & mask) >> mask.trailing_zeros();
+        (v * 255 / (mask >> mask.trailing_zeros())) as u8
+    };
+    let mut img = RgbaImage::new(width as u32, height as u32);
+    for (px, chunk) in img.pixels_mut().zip(data.chunks_exact(bpp)) {
+        let mut v = [0u8; 4];
+        v[..bpp].copy_from_slice(chunk);
+        let raw = u32::from_le_bytes(v);
+        *px = Rgba(masks.map(|m| channel(raw, m)));
+    }
+    Ok(img)
+}
+
+type Decoder = fn(&[u8], usize, usize, &mut [u32]) -> Result<(), &'static str>;
+
+/// Decodes the top mip level of a block-compressed DDS texture (BC1/BC2/BC3/BC5/BC7).
+fn decode_dds(bytes: &[u8]) -> Result<RgbaImage, String> {
     if bytes.len() < 128 || &bytes[0..4] != b"DDS " {
         return Err("not a DDS file".into());
     }
     let u32_at = |o: usize| u32::from_le_bytes(bytes[o..o + 4].try_into().unwrap());
-    let (height, width) = (u32_at(12), u32_at(16));
-    if &bytes[84..88] != b"DXT1" {
-        return Err(format!(
-            "unsupported format {:?}",
-            String::from_utf8_lossy(&bytes[84..88])
-        ));
-    }
-    let (bw, bh) = (width.div_ceil(4), height.div_ceil(4));
-    let data = &bytes[128..];
-    if data.len() < (bw * bh * 8) as usize {
-        return Err("truncated".into());
-    }
-
-    let mut img = RgbaImage::new(width, height);
-    for by in 0..bh {
-        for bx in 0..bw {
-            let block = &data[((by * bw + bx) * 8) as usize..][..8];
-            let c0 = u16::from_le_bytes([block[0], block[1]]);
-            let c1 = u16::from_le_bytes([block[2], block[3]]);
-            let (a, b) = (rgb565(c0), rgb565(c1));
-            let palette = if c0 > c1 {
-                [a, b, mix(a, b, 2, 1, 3), mix(a, b, 1, 2, 3)]
-            } else {
-                [a, b, mix(a, b, 1, 1, 2), [0, 0, 0]]
-            };
-            let indices = u32::from_le_bytes([block[4], block[5], block[6], block[7]]);
-            for i in 0..16 {
-                let (x, y) = (bx * 4 + i % 4, by * 4 + i / 4);
-                if x < width && y < height {
-                    let [r, g, b] = palette[((indices >> (2 * i)) & 3) as usize];
-                    img.put_pixel(x, y, Rgba([r, g, b, 255]));
-                }
+    let (height, width) = (u32_at(12) as usize, u32_at(16) as usize);
+    let (decode, data, bc5): (Decoder, &[u8], bool) = match &bytes[84..88] {
+        b"DXT1" => (texture2ddecoder::decode_bc1, &bytes[128..], false),
+        b"DXT3" => (texture2ddecoder::decode_bc2, &bytes[128..], false),
+        b"DXT5" => (texture2ddecoder::decode_bc3, &bytes[128..], false),
+        b"ATI2" | b"BC5U" => (texture2ddecoder::decode_bc5, &bytes[128..], true),
+        b"DX10" if bytes.len() >= 148 => {
+            let data = &bytes[148..];
+            match u32_at(128) {
+                70..=72 => (texture2ddecoder::decode_bc1 as Decoder, data, false),
+                73..=75 => (texture2ddecoder::decode_bc2, data, false),
+                76..=78 => (texture2ddecoder::decode_bc3, data, false),
+                82..=84 => (texture2ddecoder::decode_bc5, data, true),
+                97..=99 => (texture2ddecoder::decode_bc7, data, false),
+                f => return Err(format!("unsupported DXGI format {f}")),
             }
         }
+        _ if u32_at(80) & 0x40 != 0 => return decode_uncompressed(bytes, width, height),
+        other => {
+            return Err(format!(
+                "unsupported format {:?}",
+                String::from_utf8_lossy(other)
+            ))
+        }
+    };
+    let mut pixels = vec![0u32; width * height];
+    decode(data, width, height, &mut pixels)?;
+    let mut img = RgbaImage::new(width as u32, height as u32);
+    for (px, &c) in img.pixels_mut().zip(&pixels) {
+        // texture2ddecoder packs pixels as B, G, R, A bytes.
+        let [b, g, r, a] = c.to_le_bytes();
+        // BC5 normal maps store only x and y; rebuild z.
+        let b = if bc5 {
+            let (x, y) = (r as f32 / 127.5 - 1.0, g as f32 / 127.5 - 1.0);
+            (((1.0 - x * x - y * y).max(0.0).sqrt() + 1.0) * 127.5) as u8
+        } else {
+            b
+        };
+        *px = Rgba([r, g, b, a]);
     }
     Ok(img)
 }
@@ -322,21 +453,6 @@ fn hillshade(tile: &mut RgbaImage, normals: &RgbaImage) {
     }
 }
 
-fn rgb565(c: u16) -> [u8; 3] {
-    let r = (c >> 11) & 31;
-    let g = (c >> 5) & 63;
-    let b = c & 31;
-    [
-        (r * 255 / 31) as u8,
-        (g * 255 / 63) as u8,
-        (b * 255 / 31) as u8,
-    ]
-}
-
-fn mix(a: [u8; 3], b: [u8; 3], wa: u16, wb: u16, div: u16) -> [u8; 3] {
-    std::array::from_fn(|i| ((a[i] as u16 * wa + b[i] as u16 * wb) / div) as u8)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,12 +465,5 @@ mod tests {
         assert_eq!(p("tamriel.4.0.0_n.dds"), None);
         assert_eq!(p("tamriel.4.0.0.win.dds"), None);
         assert_eq!(p("tamriel.8.0.0.dds"), None);
-    }
-
-    #[test]
-    fn rgb565_extremes() {
-        assert_eq!(rgb565(0xFFFF), [255, 255, 255]);
-        assert_eq!(rgb565(0xF800), [255, 0, 0]);
-        assert_eq!(rgb565(0), [0, 0, 0]);
     }
 }

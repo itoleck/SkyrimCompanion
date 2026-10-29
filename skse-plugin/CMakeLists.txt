@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.21)
 
+# The version comes from the repository's version.txt, which create-release.ps1 bumps on every run.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../version.txt" COMPANION_VERSION)
+string(STRIP "${COMPANION_VERSION}" COMPANION_VERSION)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../version.txt")
+
 project(
     SkyrimCompanionExporter
-    VERSION 0.1.0
+    VERSION ${COMPANION_VERSION}
     DESCRIPTION "Streams Skyrim game state to the Skyrim Companion app"
     LANGUAGES CXX)
 
@@ -28,6 +33,10 @@ add_commonlibsse_plugin(${PROJECT_NAME}
     SOURCES src/plugin.cpp src/snapshot.cpp src/events.cpp src/server.cpp src/net.cpp)
 
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
+target_compile_definitions(${PROJECT_NAME} PRIVATE COMPANION_VERSION="${PROJECT_VERSION}")
+# File and product version shown in Explorer, the same version as the companion exes.
+configure_file(src/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/version.rc @ONLY)
+target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 # net.cpp includes WinSock2.h, which clashes with CommonLib's own Windows declarations.
 set_source_files_properties(src/net.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json ws2_32)

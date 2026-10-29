@@ -38,15 +38,32 @@ Plugin log: `Documents\My Games\Skyrim Special Edition\SKSE\SkyrimCompanionExpor
 
 ## Map image
 
-The map is built from your game's terrain LOD textures (loose files from xLODGen/DynDOLOD) and lines up with
-world coordinates exactly:
+The map is built from your game's terrain LOD textures and lines up with world coordinates exactly:
 
 ```powershell
-cargo run --release -p map-extract -- "E:/Games/SteamRoot/Steam/steamapps/common/Skyrim Special Edition/Data"
+cargo run --release -p map-extract                 # finds the game (Steam, GOG, Bethesda registry)
+cargo run --release -p map-extract -- "D:/Games/Skyrim Special Edition/Data"   # or name the Data folder
 ```
 
-This writes `assets/skyrim_map.png` (git-ignored). Run `map-extract --help` for resolution and crop options;
-the default crop matches the default `[map]` bounds. Rerun it after regenerating LOD.
+Tiles come from loose xLODGen/DynDOLOD output when present, otherwise straight from the game's archives
+(`Skyrim - Textures7.bsa`); an xLODGen terrain heightmap adds water to the sea. This writes
+`assets/skyrim_map.png` (git-ignored). Run `map-extract --help` for resolution and crop options; the default
+crop matches the default `[map]` bounds. Rerun it after regenerating LOD.
+
+## Package a release
+
+`.\create-release.ps1` builds the apps and writes `SkyrimCompanion.zip` with `App\` (skyrim-companion.exe,
+map-extract.exe, create-map.cmd, README.txt) and `Data\SKSE\Plugins\SkyrimCompanionExporter.dll`. Build the
+plugin first. The map image is left out unless you pass `-IncludeMap`, since it is made from the game's own
+textures; players double-click `create-map.cmd` to build it from their own install.
+
+Each run adds 1 to the patch number in `version.txt` (`0.1.0` → `0.1.1` → …) and stamps it as the file and
+product version of `skyrim-companion.exe`, `map-extract.exe` (`build-support/version_resource.rs`, used by both
+build scripts) and the SKSE plugin (`skse-plugin/CMakeLists.txt`). A failed run puts the old number back; edit
+`version.txt` to change the major or minor number. The plugin is rebuilt by `skse-plugin\build-local.cmd`
+(this PC's Visual Studio + vcpkg setup, git-ignored) when it exists; otherwise build it yourself after the bump.
+The version shows in the window title, at the bottom of **Edit → Settings** (with the connected plugin's
+version), in `run.log`, in the plugin's SKSE log, and in Explorer's file properties.
 
 ## Configuration (`companion.toml`, created on first run)
 
@@ -76,6 +93,14 @@ new bounties, standing stones, shrines, discoveries, cleared locations, dragon s
 within 5 m share one point; hover it, or stand within 5 m of it in the game, to see what happened. This is
 saved per character name in `%APPDATA%\Skyrim Companion\history\<name>.json`; **Edit → Settings** has
 buttons to reset the trail or the event points of the character being played.
+
+With **Follow player** on, the map re-centres only when the player walks out of view, so you can pan around
+freely (the default). **Edit → Settings → Map → Keep the player centred** instead keeps the player in the
+middle at all times and moves the map under them.
+
+Right-click the map and pick **Create Path to Here** for an animated path from the player (or, indoors, from
+where they were last seen outside) to that spot, or to a marker when you right-click one; **Clear Path**
+removes it.
 
 Right-click the map to add your own marker there: a note and one of the map icons (or a plain point).
 Right-click a marker to edit or delete it. Hover a marker, or come within 25 m of it, to read its note.

@@ -7,3 +7,5 @@ description = "Builds assets/skyrim_map.png from the game's terrain LOD textures
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
+lz4_flex = { version = "0.11", default-features = false, features = ["frame", "std"] }
+texture2ddecoder = "0.1"

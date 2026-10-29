@@ -75,3 +75,6 @@ companion.local.toml
 
 # --- Generated from game files by map-extract (not redistributable) ---
 assets/skyrim_map.png
+SkyrimCompanion.zip
+skse-plugin/build-local.cmd
+skse-plugin/triplets-local/

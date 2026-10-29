@@ -16,6 +16,8 @@ pub struct Snapshot {
     pub protocol: u32,
     /// Game runtime version, e.g. "1.6.1170".
     pub game_version: String,
+    /// The SKSE plugin's own version (from version.txt), e.g. "0.1.4".
+    pub plugin_version: String,
     /// False while in the main menu or a loading screen.
     pub in_game: bool,
     pub player: Player,

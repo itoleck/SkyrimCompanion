@@ -47,6 +47,7 @@ fn fake_snapshot(t: f32) -> Snapshot {
     Snapshot {
         protocol: PROTOCOL_VERSION,
         game_version: "mock".into(),
+        plugin_version: "mock".into(),
         in_game: true,
         player: Player {
             name: "Dovahkiin".into(),

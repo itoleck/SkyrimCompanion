@@ -22,7 +22,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse)
 {
     InitLogging();
     SKSE::Init(skse);
-    logger::info("Skyrim Companion exporter loading, game {}", REL::Module::get().version().string());
+    logger::info("Skyrim Companion exporter {} loading, game {}", COMPANION_VERSION, REL::Module::get().version().string());
 
     SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* msg) {
         switch (msg->type) {

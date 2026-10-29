@@ -146,10 +146,15 @@ pub struct MapView {
     center: Vec2,
     /// Set once the view has been centred on the player after start-up.
     centered: bool,
+    /// Follow mode: keep the player in the middle at all times instead of only re-centring
+    /// when they leave the view (Edit > Settings).
+    pub keep_centered: bool,
     /// Where the map was right-clicked (world x, y) and the player marker under the mouse, if any.
     menu: Option<(f32, f32, Option<usize>)>,
     /// The map marker window, while adding or editing one.
     editor: Option<PinEditor>,
+    /// World x, y picked with "Create Path to Here"; an animated path runs to it from the player.
+    path_to: Option<(f32, f32)>,
 }
 
 struct PinEditor {
@@ -160,7 +165,7 @@ struct PinEditor {
 
 impl MapView {
     pub fn new(ctx: &egui::Context, cfg: MapConfig) -> Self {
-        let (texture, image_error) = match load_texture(ctx, &cfg.image) {
+        let (texture, image_error) = match load_texture(ctx, &crate::config::resolve(&cfg.image)) {
             Ok(t) => (Some(t), None),
             Err(e) => (None, Some(e)),
         };
@@ -170,8 +175,10 @@ impl MapView {
             image_error,
             center: Vec2::splat(0.5),
             centered: false,
+            keep_centered: false,
             menu: None,
             editor: None,
+            path_to: None,
         }
     }
 
@@ -208,7 +215,7 @@ impl MapView {
             );
             if let Some(e) = &self.image_error {
                 ui.label(
-                    egui::RichText::new(format!("No map image ({e})"))
+                    egui::RichText::new(format!("No map image: run create-map.cmd ({e})"))
                         .small()
                         .color(DIM),
                 );
@@ -233,11 +240,12 @@ impl MapView {
             self.center -= response.drag_delta() / size;
         }
         // Follow: centre on the player at start-up, then only when they leave the visible area,
-        // so manual panning sticks while the player is in view.
+        // so manual panning sticks while the player is in view. With keep_centered the player
+        // stays in the middle and the map pans under them.
         if self.cfg.follow_player && on_map {
             let player = self.to_uv(snap.player.position);
             let on_screen = rect.center() + (player - self.center) * size;
-            if !self.centered || !rect.shrink(12.0).contains(on_screen) {
+            if self.keep_centered || !self.centered || !rect.shrink(12.0).contains(on_screen) {
                 self.center = player;
                 self.centered = true;
             }
@@ -345,7 +353,19 @@ impl MapView {
                 ui.close();
                 return;
             };
-            match pin.and_then(|i| history.pins.get(i).map(|p| (i, p))) {
+            let existing = pin.and_then(|i| history.pins.get(i).map(|p| (i, p)));
+            // A path to a marker goes to the marker itself, not the exact pixel clicked.
+            let target = existing.map_or((x, y), |(_, p)| (p.x, p.y));
+            if ui.button("Create Path to Here").clicked() {
+                self.path_to = Some(target);
+                ui.close();
+            }
+            if self.path_to.is_some() && ui.button("Clear Path").clicked() {
+                self.path_to = None;
+                ui.close();
+            }
+            ui.separator();
+            match existing {
                 Some((i, existing)) => {
                     if ui.button("Edit marker\u{2026}").clicked() {
                         self.editor = Some(PinEditor {
@@ -374,6 +394,34 @@ impl MapView {
                 }
             }
         });
+
+        // The player's own path: from where they are (or, indoors, where they were last seen
+        // outside in Tamriel) to the spot picked with "Create Path to Here".
+        if let Some((x, y)) = self.path_to {
+            let from = if on_map {
+                Some(snap.player.position)
+            } else {
+                history.trail.last().map(|p| Vec3 {
+                    x: p.x,
+                    y: p.y,
+                    z: 0.0,
+                })
+            };
+            let goal = Vec3 { x, y, z: 0.0 };
+            let target = to_screen(self.to_uv(goal));
+            if let Some(from) = from {
+                let start = to_screen(self.to_uv(from));
+                let time = ui.input(|i| i.time) as f32;
+                draw_quest_path(&painter, rect, start, target, PIN_COLOR, time);
+                if !rect.contains(target) {
+                    draw_edge_arrow(&painter, rect, target, PIN_COLOR, dist2(from, goal).sqrt());
+                }
+                ui.ctx().request_repaint();
+            } else {
+                // Nowhere known to start from yet: just mark the destination.
+                painter.circle_stroke(target, 8.0, Stroke::new(2.0, PIN_COLOR));
+            }
+        }
 
         // Markers are in the player's current space, so they only belong on the map outside.
         if on_map {

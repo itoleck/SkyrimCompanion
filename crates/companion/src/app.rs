@@ -148,6 +148,7 @@ impl eframe::App for CompanionApp {
             if !live || !snap.in_game {
                 ui.label(RichText::new("Waiting for Skyrim…").color(DIM));
             }
+            self.map.keep_centered = self.settings.map_keep_centered;
             if let Some(change) = self.map.show(
                 ui,
                 &snap,
@@ -160,7 +161,7 @@ impl eframe::App for CompanionApp {
             }
         });
 
-        self.settings_ui(ui.ctx());
+        self.settings_ui(ui.ctx(), &snap.plugin_version);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -169,7 +170,7 @@ impl eframe::App for CompanionApp {
 }
 
 impl CompanionApp {
-    fn settings_ui(&mut self, ctx: &egui::Context) {
+    fn settings_ui(&mut self, ctx: &egui::Context, plugin_version: &str) {
         let w = &mut self.settings_window;
         if !w.open {
             return;
@@ -250,6 +251,17 @@ impl CompanionApp {
                                 }
                             });
                         ui.end_row();
+
+                        ui.label("Map");
+                        ui.checkbox(
+                            &mut self.settings.map_keep_centered,
+                            "Keep the player centred (the map moves with them)",
+                        )
+                        .on_hover_text(
+                            "With Follow player on. Off: the map only moves when the player \
+                             leaves the visible area, so you can pan around freely.",
+                        );
+                        ui.end_row();
                     });
 
                 ui.separator();
@@ -268,6 +280,20 @@ impl CompanionApp {
                     }
                     ui.label(RichText::new(&w.status).small().color(DIM));
                 });
+                ui.separator();
+                let plugin = if plugin_version.is_empty() {
+                    "not connected".to_string()
+                } else {
+                    plugin_version.to_string()
+                };
+                ui.label(
+                    RichText::new(format!(
+                        "Skyrim Companion {} \u{B7} SKSE plugin {plugin}",
+                        env!("COMPANION_VERSION")
+                    ))
+                    .small()
+                    .color(DIM),
+                );
             });
         w.open = open;
 

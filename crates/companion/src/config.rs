@@ -2,6 +2,20 @@ use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_PATH: &str = "companion.toml";
 
+/// A relative path that doesn't exist from the working folder is looked up next to the exe,
+/// so the app also finds its files when started from a shortcut or another folder.
+pub fn resolve(path: &str) -> String {
+    let p = std::path::Path::new(path);
+    if p.is_absolute() || p.exists() {
+        return path.to_string();
+    }
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(p)))
+        .filter(|candidate| candidate.exists())
+        .map_or_else(|| path.to_string(), |c| c.to_string_lossy().into_owned())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {

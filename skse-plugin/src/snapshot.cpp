@@ -568,6 +568,7 @@ namespace companion
         json j;
         j["protocol"] = kProtocolVersion;
         j["game_version"] = REL::Module::get().version().string();
+        j["plugin_version"] = COMPANION_VERSION;
 
         auto* player = RE::PlayerCharacter::GetSingleton();
         auto* data = RE::TESDataHandler::GetSingleton();

@@ -21,6 +21,9 @@ pub struct Settings {
     pub font_index: u32,
     /// Which quests the quest list shows.
     pub quest_filter: Vec<QuestStatus>,
+    /// With "Follow player" on: keep the player in the middle of the map and pan the map as they
+    /// move. Off (the default), the map only re-centres when the player leaves the visible area.
+    pub map_keep_centered: bool,
 }
 
 /// Default font family and its file in the Windows fonts folder (ships with Windows/Office).
@@ -38,6 +41,7 @@ impl Default for Settings {
             font_file: file,
             font_index: 0,
             quest_filter: vec![QuestStatus::Tracked, QuestStatus::Current],
+            map_keep_centered: false,
         }
     }
 }
@@ -206,6 +210,7 @@ mod tests {
             font_file: Some(PathBuf::from("C:/Windows/Fonts/georgia.ttf")),
             font_index: 0,
             quest_filter: vec![QuestStatus::Completed],
+            map_keep_centered: true,
         };
         let text = toml::to_string_pretty(&s).unwrap();
         assert_eq!(toml::from_str::<Settings>(&text).unwrap(), s);

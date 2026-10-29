@@ -1,0 +1,28 @@
+// Windows version resource for the plugin DLL; CMake fills in the version from version.txt.
+1 VERSIONINFO
+FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEFLAGSMASK 0x3F
+FILEFLAGS 0x0
+FILEOS 0x40004
+FILETYPE 0x2
+FILESUBTYPE 0x0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "Skyrim Companion SKSE plugin"
+            VALUE "FileVersion", "@PROJECT_VERSION@"
+            VALUE "InternalName", "SkyrimCompanionExporter"
+            VALUE "LegalCopyright", "MIT 2026"
+            VALUE "OriginalFilename", "SkyrimCompanionExporter.dll"
+            VALUE "ProductName", "Skyrim Companion"
+            VALUE "ProductVersion", "@PROJECT_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
