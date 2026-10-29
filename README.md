@@ -3,14 +3,24 @@
 A second-monitor companion for Skyrim Special Edition, written in Rust. Shows time of day, level and XP to
 the next level, wanted status, a compass, a world map with your position, and your quest journal.
 
+**Requires SKSE and Address Library for SKSE Plugins minimum**
+
 A small SKSE plugin reads the game state and streams it over `127.0.0.1:47311`; the Rust app displays it.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for why.
+
+## Run Skyrim Companion
+
+1. Download newest release, unzip, run \app\create-map.cmd
+2. Start `skyrim-companion.exe`
+3. Start Skyrim through SKSE:
+   `"E:\Games\SteamRoot\Steam\steamapps\common\Skyrim Special Edition\skse64_loader.exe"`
+4. The app starts showing once a save or new game is loaded.
 
 ## Try the UI without Skyrim
 
 ```powershell
 cargo run -p mock-skse          # terminal 1: fake game data
-cargo run -p skyrim-companion   # terminal 2: the app
+cargo run -p skyrim-companion   # terminal 2: compile the app
 ```
 
 ## Build and install the SKSE plugin (Windows)
@@ -26,15 +36,6 @@ cmake --build --preset release
 
 With `SKYRIM_DATA` set the DLL is copied to `Data/SKSE/Plugins` after each build. Run the build from a
 "x64 Native Tools Command Prompt for VS 2022" so Ninja finds MSVC.
-
-## Run
-
-1. Start Skyrim through SKSE:
-   `"E:\Games\SteamRoot\Steam\steamapps\common\Skyrim Special Edition\skse64_loader.exe"`
-2. Start `skyrim-companion.exe` (`cargo run --release -p skyrim-companion`).
-3. The badge in the top right turns **Live** once a save is loaded.
-
-Plugin log: `Documents\My Games\Skyrim Special Edition\SKSE\SkyrimCompanionExporter.log`.
 
 ## Map image
 
@@ -105,6 +106,8 @@ removes it. The path is saved in the character's history file and comes back nex
 Right-click the map to add your own marker there: a note and one of the map icons (or a plain point).
 Right-click a marker to edit or delete it. Hover a marker, or come within 25 m of it, to read its note.
 Markers are saved in the same per-character history file.
+
+Plugin log: `Documents\My Games\Skyrim Special Edition\SKSE\SkyrimCompanionExporter.log`.
 
 ## Layout
 
