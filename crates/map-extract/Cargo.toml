@@ -1,0 +1,9 @@
+[package]
+name = "map-extract"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Builds assets/skyrim_map.png from the game's terrain LOD textures"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }

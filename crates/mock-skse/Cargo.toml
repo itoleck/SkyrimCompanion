@@ -1,0 +1,9 @@
+[package]
+name = "mock-skse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Fake SKSE exporter that streams animated game data, for developing the UI without Skyrim running"
+
+[dependencies]
+protocol.workspace = true

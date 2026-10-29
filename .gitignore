@@ -1,0 +1,77 @@
+# --- Rust ---
+/target/
+**/target/
+**/*.rs.bk
+*.pdb
+
+# --- C++ / CMake / vcpkg (SKSE plugin) ---
+skse-plugin/build/
+skse-plugin/out/
+skse-plugin/vcpkg_installed/
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+*.obj
+*.o
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+*.log
+*.tlog
+
+# --- Node / web ---
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+.vite/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Editors / IDEs ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstore
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Claude scratch (temp files live here, not in system temp) ---
+.claude/scratch/
+.claude/tmp/
+.claude/settings.local.json
+
+# --- Local app config overrides ---
+companion.local.toml
+
+# --- Generated from game files by map-extract (not redistributable) ---
+assets/skyrim_map.png

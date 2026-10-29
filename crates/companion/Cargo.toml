@@ -1,0 +1,20 @@
+[package]
+name = "skyrim-companion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Second-monitor companion for Skyrim Special Edition"
+
+[dependencies]
+protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+egui = "0.37"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+toml = "0.9"
+ttf-parser = "0.25"
+
+# Lets the UI be built and run on Linux for development; ignored on Windows.
+[target.'cfg(target_os = "linux")'.dependencies]
+eframe = { version = "0.37", default-features = false, features = ["x11", "wayland"] }

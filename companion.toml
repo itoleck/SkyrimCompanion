@@ -1,0 +1,22 @@
+server = "127.0.0.1:47311"
+
+[window]
+x = -2560.0
+y = 0.0
+width = 1280.0
+height = 800.0
+fullscreen = true
+always_on_top = false
+
+[compass]
+# "camera" = where the mouse/camera looks (like the in-game compass), "character" = where the body faces
+follow = "camera"
+
+[map]
+image = "assets/skyrim_map.png"
+world_min_x = -233472.0
+world_max_x = 253952.0
+world_min_y = -176128.0
+world_max_y = 208896.0
+zoom = 4.0
+follow_player = true
