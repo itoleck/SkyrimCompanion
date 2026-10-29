@@ -153,8 +153,6 @@ pub struct MapView {
     menu: Option<(f32, f32, Option<usize>)>,
     /// The map marker window, while adding or editing one.
     editor: Option<PinEditor>,
-    /// World x, y picked with "Create Path to Here"; an animated path runs to it from the player.
-    path_to: Option<(f32, f32)>,
 }
 
 struct PinEditor {
@@ -178,7 +176,6 @@ impl MapView {
             keep_centered: false,
             menu: None,
             editor: None,
-            path_to: None,
         }
     }
 
@@ -357,11 +354,11 @@ impl MapView {
             // A path to a marker goes to the marker itself, not the exact pixel clicked.
             let target = existing.map_or((x, y), |(_, p)| (p.x, p.y));
             if ui.button("Create Path to Here").clicked() {
-                self.path_to = Some(target);
+                change = Some(history::PinChange::SetPath(target.0, target.1));
                 ui.close();
             }
-            if self.path_to.is_some() && ui.button("Clear Path").clicked() {
-                self.path_to = None;
+            if history.path_to.is_some() && ui.button("Clear Path").clicked() {
+                change = Some(history::PinChange::ClearPath);
                 ui.close();
             }
             ui.separator();
@@ -397,7 +394,7 @@ impl MapView {
 
         // The player's own path: from where they are (or, indoors, where they were last seen
         // outside in Tamriel) to the spot picked with "Create Path to Here".
-        if let Some((x, y)) = self.path_to {
+        if let Some([x, y]) = history.path_to {
             let from = if on_map {
                 Some(snap.player.position)
             } else {

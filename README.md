@@ -100,7 +100,7 @@ middle at all times and moves the map under them.
 
 Right-click the map and pick **Create Path to Here** for an animated path from the player (or, indoors, from
 where they were last seen outside) to that spot, or to a marker when you right-click one; **Clear Path**
-removes it.
+removes it. The path is saved in the character's history file and comes back next time.
 
 Right-click the map to add your own marker there: a note and one of the map icons (or a plain point).
 Right-click a marker to edit or delete it. Hover a marker, or come within 25 m of it, to read its note.

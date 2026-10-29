@@ -98,12 +98,15 @@ impl Pin {
     }
 }
 
-/// An edit to the player's own map markers.
+/// An edit to the player's own map markers or their custom path.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PinChange {
     Add(Pin),
     Update(usize, Pin),
     Remove(usize),
+    /// "Create Path to Here": world x, y of the destination.
+    SetPath(f32, f32),
+    ClearPath,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -113,6 +116,8 @@ pub struct Data {
     pub trail: Vec<TrailPoint>,
     pub spots: Vec<Spot>,
     pub pins: Vec<Pin>,
+    /// Destination (world x, y) of the path made with "Create Path to Here", if any.
+    pub path_to: Option<[f32; 2]>,
     /// (plugin session, seq) of the newest event already recorded.
     pub last_event: (u64, u64),
 }
@@ -329,10 +334,12 @@ impl History {
         }
     }
 
-    /// Applies a map marker edit and saves straight away.
+    /// Applies a map marker or path edit and saves straight away.
     pub fn change_pin(&mut self, change: PinChange) {
         let pins = &mut self.data.pins;
         match change {
+            PinChange::SetPath(x, y) => self.data.path_to = Some([x, y]),
+            PinChange::ClearPath => self.data.path_to = None,
             PinChange::Add(pin) => pins.push(pin),
             PinChange::Update(i, pin) if i < pins.len() => pins[i] = pin,
             PinChange::Remove(i) if i < pins.len() => {
@@ -505,6 +512,7 @@ mod tests {
             text: "Loot later".into(),
         });
         d.pins.push(Pin::default());
+        d.path_to = Some([3.0, 4.0]);
         let text = serde_json::to_string(&d).unwrap();
         assert_eq!(serde_json::from_str::<Data>(&text).unwrap(), d);
         assert!(History::path("Lydia: Housecarl")
